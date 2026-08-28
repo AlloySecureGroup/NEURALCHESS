@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#111827" />
+  <title>My 5-Layer Chess Neural Network</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="app">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">PLAIN HTML + CSS + JAVASCRIPT</p>
+        <h1>My 5-Layer Chess Neural Network</h1>
+        <p class="subtitle">
+          Train it in your browser, save the brain on your device, then play against it.
+        </p>
+      </div>
+      <div class="brain-pill">
+        <span class="dot"></span>
+        <span id="brainState">Brain ready</span>
+      </div>
+    </header>
+
+    <nav class="tabs" aria-label="App sections">
+      <button id="playTabBtn" class="tab-button active" type="button" aria-selected="true">Play / Train</button>
+      <button id="networkTabBtn" class="tab-button" type="button" aria-selected="false">Neural Network</button>
+      <button id="weightsTabBtn" class="tab-button" type="button" aria-selected="false">Weights</button>
+    </nav>
+
+    <div id="playPanel" class="tab-panel active">
+    <section class="layout">
+      <div class="board-panel card">
+        <div class="toolbar">
+          <label>
+            Play as
+            <select id="sideSelect">
+              <option value="w">White</option>
+              <option value="b">Black</option>
+            </select>
+          </label>
+
+          <button id="newGameBtn" class="secondary">New game</button>
+        </div>
+
+        <div class="board-shell">
+          <div class="board-frame-accent"></div>
+          <div id="board" class="board" aria-label="Chess board"></div>
+        </div>
+
+        <div class="status-box">
+          <div>
+            <span class="label">Status</span>
+            <strong id="statusText">Ready</strong>
+          </div>
+          <div>
+            <span class="label">Neural evaluation</span>
+            <strong id="evalText">0.000</strong>
+          </div>
+        </div>
+
+        <p class="hint">
+          Tap one of your pieces, then tap its destination. Promotions become queens automatically. The highlighted glow shows your selected piece and legal target squares.
+        </p>
+      </div>
+
+      <aside class="controls card">
+        <section class="recommendations-section">
+          <div class="section-title-row">
+            <div>
+              <p class="eyebrow">YOUR MOVE COACH</p>
+              <h2>Recommended moves</h2>
+            </div>
+            <span id="recommendationTurnBadge" class="turn-badge">White to move</span>
+          </div>
+          <p class="tiny">
+            These are ranked by your neural network — not Stockfish. Tap a recommendation to play it immediately.
+          </p>
+          <div id="recommendationSummary" class="recommendation-summary">Analyzing legal moves…</div>
+          <div id="playerRecommendations" class="player-recommendations"></div>
+        </section>
+
+        <section>
+          <h2>2. Train the brain</h2>
+          <p>
+            Bootstrap training teaches basic piece value. Self-play lets the network learn from its own games.
+          </p>
+
+          <div class="button-grid">
+            <button id="train250Btn">Train 250</button>
+            <button id="train1000Btn">Train 1000</button>
+            <button id="selfPlayBtn">Self-play 1 game</button>
+          </div>
+
+          <div class="progress-wrap">
+            <progress id="trainProgress" max="100" value="0"></progress>
+            <span id="trainMessage">No training running.</span>
+          </div>
+        </section>
+
+        <section>
+          <h2>3. Your network</h2>
+          <div class="network">
+            <div>64</div><span>→</span>
+            <div>32</div><span>→</span>
+            <div>24</div><span>→</span>
+            <div>16</div><span>→</span>
+            <div>8</div><span>→</span>
+            <div>1</div>
+          </div>
+          <p class="tiny">
+            Five trainable weight layers. Output near +1 means good for White; near -1 means good for Black.
+          </p>
+        </section>
+
+        <section>
+          <h2>4. Save / move the brain</h2>
+          <div class="button-grid">
+            <button id="saveBtn" class="secondary">Save locally</button>
+            <button id="exportBtn" class="secondary">Export JSON</button>
+            <label class="file-button">
+              Import JSON
+              <input id="importInput" type="file" accept="application/json,.json" />
+            </label>
+            <button id="resetBrainBtn" class="danger">Reset brain</button>
+          </div>
+          <p class="tiny">
+            Local save uses your browser's localStorage. Export JSON lets you keep a copy elsewhere.
+          </p>
+        </section>
+
+        <section>
+          <h2>Move history</h2>
+          <div id="moveHistory" class="history">No moves yet.</div>
+        </section>
+      </aside>
+    </section>
+
+    <section class="explain card">
+      <h2>How the learning loop works</h2>
+      <div class="steps">
+        <div><b>1</b><span>Board becomes 64 numbers.</span></div>
+        <div><b>2</b><span>The five layers produce one position score.</span></div>
+        <div><b>3</b><span>The AI tests every legal move and chooses the best score.</span></div>
+        <div><b>4</b><span>Back-propagation changes weights after training examples.</span></div>
+      </div>
+    </section>
+    </div>
+
+
+    <section id="networkPanel" class="tab-panel" aria-labelledby="networkTabBtn">
+      <div class="network-lab card">
+        <div class="network-lab-header">
+          <div>
+            <p class="eyebrow">LIVE INFERENCE VISUALIZER</p>
+            <h2>Watch the position travel through your network</h2>
+            <p class="subtitle network-lab-subtitle">
+              Every glowing node is a real activation from the current chess position. Bright connections are the strongest weighted contributions flowing toward the next layer.
+            </p>
+          </div>
+          <div class="network-lab-actions">
+            <button id="animateNetworkBtn" type="button">Replay pulse</button>
+            <button id="refreshNetworkBtn" class="secondary" type="button">Recompute</button>
+          </div>
+        </div>
+
+        <div class="network-readout-grid">
+          <div class="network-readout move-readout">
+            <span>Last move</span>
+            <strong id="networkMoveLabel">Starting position</strong>
+            <small id="networkMoveSquares">No move yet</small>
+          </div>
+          <div class="network-readout">
+            <span>Output</span>
+            <strong id="networkEvalValue">0.000</strong>
+            <small>+1 White · −1 Black</small>
+          </div>
+          <div class="network-readout">
+            <span>Training updates</span>
+            <strong id="networkUpdateCount">0</strong>
+            <small>Back-propagation steps</small>
+          </div>
+          <div class="network-readout">
+            <span>Last mean |Δweight|</span>
+            <strong id="networkDeltaValue">0.000000</strong>
+            <small id="networkLearningRate">No update yet</small>
+          </div>
+        </div>
+
+        <section class="decision-analysis">
+          <div class="decision-heading">
+            <div>
+              <p class="eyebrow">MOVE → PULSE → OUTPUT</p>
+              <h3>Decision analysis</h3>
+              <p class="tiny">
+                The network evaluates every legal candidate. Select one below to make the pulse show that candidate's resulting position without changing the real game.
+              </p>
+            </div>
+            <div class="decision-actions">
+              <button id="clearCandidatePreviewBtn" class="secondary" type="button">Current position</button>
+              <button id="playCandidateBtn" type="button" disabled>Play selected move</button>
+            </div>
+          </div>
+
+          <div class="decision-grid">
+            <div>
+              <div class="candidate-list-header">
+                <strong id="candidateSideLabel">Legal moves</strong>
+                <span id="candidateCountLabel">0 candidates</span>
+              </div>
+              <div id="candidateMoveList" class="candidate-move-list"></div>
+            </div>
+
+            <div id="candidateDetail" class="candidate-detail">
+              <span class="candidate-detail-kicker">CURRENT POSITION</span>
+              <strong>Choose a candidate move</strong>
+              <p>Tap a move to preview the exact network pulse and inspect why the output changes.</p>
+            </div>
+          </div>
+        </section>
+
+        <div class="network-visual-stage">
+          <canvas id="networkCanvas" class="network-canvas" aria-label="Live neural network activation visualization"></canvas>
+          <div class="network-legend" aria-hidden="true">
+            <span><i class="legend-positive"></i> positive activation / contribution</span>
+            <span><i class="legend-negative"></i> negative activation / contribution</span>
+            <span><i class="legend-neutral"></i> near zero</span>
+          </div>
+        </div>
+
+        <div id="networkLayerSummary" class="network-layer-summary"></div>
+
+        <div class="network-detail-grid">
+          <section class="network-detail-card">
+            <div class="detail-card-title">
+              <span>01</span>
+              <div><h3>Board-square influence</h3><p>Which occupied squares feed the first hidden layer most strongly.</p></div>
+            </div>
+            <div id="topInputInfluences" class="influence-list"></div>
+          </section>
+
+          <section class="network-detail-card">
+            <div class="detail-card-title">
+              <span>02</span>
+              <div><h3>Strongest live connections</h3><p>Largest activation × weight signals anywhere in the network.</p></div>
+            </div>
+            <div id="topConnectionInfluences" class="influence-list"></div>
+          </section>
+
+          <section class="network-detail-card explanation-card">
+            <div class="detail-card-title">
+              <span>03</span>
+              <div><h3>What the pulse means</h3><p>The selected move's score in plain language.</p></div>
+            </div>
+            <div id="pulseExplanation" class="pulse-explanation"></div>
+          </section>
+        </div>
+
+        <div class="backprop-lab">
+          <div>
+            <p class="eyebrow">MANUAL LEARNING LAB</p>
+            <h3>Back-propagate this exact position</h3>
+            <p class="tiny">
+              Pick the score you want the network to learn for the current board, then run one real gradient-descent update. The weights, biases, update counter, Weights tab and activations all change immediately.
+            </p>
+          </div>
+
+          <div class="backprop-controls">
+            <label class="range-control">
+              <span>Target score <strong id="targetScoreValue">0.00</strong></span>
+              <input id="targetScoreInput" type="range" min="-1" max="1" step="0.05" value="0" />
+              <span class="range-ends"><small>Black −1</small><small>White +1</small></span>
+            </label>
+
+            <label class="range-control">
+              <span>Learning rate <strong id="learningRateValue">0.010</strong></span>
+              <input id="learningRateInput" type="range" min="0.001" max="0.050" step="0.001" value="0.010" />
+              <span class="range-ends"><small>gentle</small><small>strong</small></span>
+            </label>
+
+            <button id="trainCurrentPositionBtn" class="train-current-button" type="button">Backpropagate current position</button>
+          </div>
+          <div id="manualTrainResult" class="manual-train-result" aria-live="polite">No manual update yet.</div>
+        </div>
+      </div>
+    </section>
+
+    <section id="weightsPanel" class="tab-panel" aria-labelledby="weightsTabBtn">
+      <div class="weights-card card">
+        <div class="weights-header">
+          <div>
+            <p class="eyebrow">LOOK INSIDE THE NETWORK</p>
+            <h2>Weights &amp; Biases</h2>
+            <p class="subtitle weights-subtitle">
+              Inspect the exact numbers learned by each trainable layer. Positive and negative weights are shaded differently; stronger weights are more saturated.
+            </p>
+          </div>
+          <div class="weights-actions">
+            <label>
+              Layer
+              <select id="weightLayerSelect"></select>
+            </label>
+            <button id="refreshWeightsBtn" class="secondary" type="button">Refresh</button>
+          </div>
+        </div>
+
+        <div id="weightStats" class="weight-stats"></div>
+
+        <div class="weights-section">
+          <div class="weights-section-title">
+            <h3>Weight matrix</h3>
+            <span id="weightMatrixShape" class="matrix-shape"></span>
+          </div>
+          <p id="weightMatrixHelp" class="tiny"></p>
+          <div class="matrix-scroll">
+            <table id="weightsTable" class="weights-table"></table>
+          </div>
+        </div>
+
+        <div class="weights-section">
+          <div class="weights-section-title">
+            <h3>Biases</h3>
+            <span id="biasCount" class="matrix-shape"></span>
+          </div>
+          <div id="biasGrid" class="bias-grid"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- chess.js supplies legal chess rules. The neural network itself is entirely in app.js. -->
+  <script src="chess.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

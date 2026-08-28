@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>My 5-Layer Chess Neural Network — Illustrated Guide</title>
+<style>
+:root { color-scheme: dark; }
+body {
+  margin: 0; background: #08111d; color: #eaf1ff;
+  font: 17px/1.62 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+}
+main { width: min(100% - 28px, 980px); margin: auto; padding: 36px 0 80px; }
+h1 { font-size: clamp(2.2rem,7vw,4.7rem); line-height: .98; margin: 0 0 28px; }
+h2 { margin-top: 2.6em; padding-top: .5em; border-top: 1px solid #26354c; font-size: 1.8rem; }
+h3 { margin-top: 2em; color: #cfe4ff; }
+p,li { color:#c5d1e4; }
+strong { color:#fff; }
+code { background:#142237; padding:.12em .35em; border-radius:5px; color:#d9ecff; }
+pre { overflow:auto; background:#050b14; border:1px solid #253650; border-radius:14px; padding:16px; }
+pre code { background:none; padding:0; color:#d9ecff; }
+figure { margin: 28px 0 38px; }
+img { display:block; max-width:100%; height:auto; border-radius:16px; border:1px solid #2b3c55; }
+figcaption { color:#8fa4c1; font-size:.85rem; margin-top:8px; }
+table { width:100%; border-collapse:collapse; display:block; overflow:auto; margin:20px 0 30px; }
+th,td { padding:9px 12px; border:1px solid #293a52; white-space:nowrap; }
+th { background:#132139; color:#fff; }
+td { color:#c5d1e4; }
+a { color:#7dc2ff; }
+hr { border:0; border-top:1px solid #26354c; margin:38px 0; }
+</style>
+</head>
+<body><main>
+<h1>My 5-Layer Chess Neural Network</h1><p>A small, fully offline chess-learning project written in <strong>plain HTML, CSS and JavaScript</strong>.</p><p>The goal of this project is not to reproduce Stockfish or AlphaZero. The goal is to make a neural chess player that is small enough to understand, inspect, modify, train, and run directly on an iPad.</p><p>The neural network, forward propagation, back-propagation, move evaluation, training loop, weight storage and visualization are all implemented in <a href="app.js"><code>app.js</code></a>. The bundled <a href="chess.min.js"><code>chess.min.js</code></a> library is used only for chess rules: legal moves, check, checkmate, castling, promotion, draw detection, and board state.</p><hr><h2>Contents</h2><ul><li><a href="#quick-start-on-ipad--ish">Quick start on iPad / iSH</a></li><li><a href="#the-three-main-tabs">The three main tabs</a></li><li><a href="#what-the-neural-network-actually-is">What the neural network actually is</a></li><li><a href="#how-a-chessboard-becomes-64-numbers">How a chessboard becomes 64 numbers</a></li><li><a href="#how-forward-propagation-works">How forward propagation works</a></li><li><a href="#how-a-move-becomes-a-recommendation">How a move becomes a recommendation</a></li><li><a href="#how-the-neural-pulse-relates-to-a-move">How the neural pulse relates to a move</a></li><li><a href="#what-the-weights-mean">What the weights mean</a></li><li><a href="#how-the-network-learns">How the network learns</a></li><li><a href="#the-four-ways-this-app-trains">The four ways this app trains</a></li><li><a href="#what-back-propagation-is-doing-mathematically">What back-propagation is doing mathematically</a></li><li><a href="#how-to-read-the-neural-network-tab">How to read the Neural Network tab</a></li><li><a href="#how-to-read-the-weights-tab">How to read the Weights tab</a></li><li><a href="#should-we-use-more-layers">Should we use more layers?</a></li><li><a href="#what-i-would-improve-before-adding-layers">What I would improve before adding layers</a></li><li><a href="#a-sensible-version-2-roadmap">A sensible Version 2 roadmap</a></li><li><a href="#experiments-to-try">Experiments to try</a></li><li><a href="#important-limitations">Important limitations</a></li><li><a href="#where-to-modify-the-code">Where to modify the code</a></li></ul><hr><h1>Quick start on iPad / iSH</h1><p>Unzip the project, open iSH, and change into the project directory:</p><pre><code>cd my_chess_neural_network_documented_complete</code></pre><p>If Python is not already installed:</p><pre><code>apk update
+apk add python3</code></pre><p>Start the local web server:</p><pre><code>chmod +x start.sh
+./start.sh</code></pre><p>or:</p><pre><code>python3 -m http.server 8080</code></pre><p>Open Safari and visit:</p><pre><code>http://localhost:8080</code></pre><p>Everything required by the chess application is local. <code>chess.min.js</code>, <code>app.js</code>, <code>styles.css</code>, and the HTML page are all bundled with the project.</p><hr><h1>The three main tabs</h1><p>The app has three views:</p><ol><li><strong>Play / Train</strong> — play chess, see recommendations, train the network, and save the brain.</li><li><strong>Neural Network</strong> — inspect candidate moves, watch activations flow through the layers, and manually back-propagate a position.</li><li><strong>Weights</strong> — inspect the actual matrices and biases stored in the network.</li></ol><h2>Play / Train</h2><figure><img src="README_assets/guide_play_board_and_recommendations.png" alt="Playable board and neural move recommendations"><figcaption>Playable board and neural move recommendations</figcaption></figure><p>The right-hand <strong>Recommended moves</strong> panel evaluates every legal move and displays the best moves according to this neural network.</p><p>This is deliberately <em>not</em> a Stockfish recommendation. If the network is untrained, its recommendations may be poor or almost random. As training changes the weights, its preferred moves can change.</p><hr><h1>What the neural network actually is</h1><p>The current architecture is:</p><pre><code>64 board inputs
+      │
+      ▼
+32 neurons
+      │
+      ▼
+24 neurons
+      │
+      ▼
+16 neurons
+      │
+      ▼
+8 neurons
+      │
+      ▼
+1 output</code></pre><p>Or, more compactly:</p><pre><code>64 → 32 → 24 → 16 → 8 → 1</code></pre><p>There are <strong>five trainable transformations</strong>:</p><table><thead><tr><th>Trainable layer</th><th>Shape</th><th>Weights</th><th>Biases</th><th>Parameters</th></tr></thead><tbody><tr><td>Layer 1</td><td>64 → 32</td><td>2,048</td><td>32</td><td>2,080</td></tr><tr><td>Layer 2</td><td>32 → 24</td><td>768</td><td>24</td><td>792</td></tr><tr><td>Layer 3</td><td>24 → 16</td><td>384</td><td>16</td><td>400</td></tr><tr><td>Layer 4</td><td>16 → 8</td><td>128</td><td>8</td><td>136</td></tr><tr><td>Layer 5</td><td>8 → 1</td><td>8</td><td>1</td><td>9</td></tr><tr><td><strong>Total</strong></td><td></td><td><strong>3,336</strong></td><td><strong>81</strong></td><td><strong>3,417</strong></td></tr></tbody></table><p>The input itself is not trainable. Some people would therefore describe this as a five-layer trainable network; other conventions count the input and would call it six layers including the input layer. Throughout this project, <strong>“5-layer network” means five sets of trainable weights</strong>.</p><p>The final output is bounded by <code>tanh()</code>:</p><pre><code>-1.0                0.0                +1.0
+Black advantage     roughly equal      White advantage</code></pre><p>It is an <strong>evaluation</strong>, not a win probability.</p><p>For example:</p><pre><code>+0.72  strongly favors White according to the network
++0.08  slightly favors White
+ 0.00  approximately neutral
+-0.10  slightly favors Black
+-0.83  strongly favors Black</code></pre><p>The scale is learned and is not calibrated to centipawns.</p><hr><h1>How a chessboard becomes 64 numbers</h1><p>The function responsible for this is:</p><pre><code>encodeBoard(chess)</code></pre><p>Each of the 64 squares becomes exactly one number.</p><p>The piece codes are:</p><table><thead><tr><th>Piece</th><th>Raw code</th><th>Encoded magnitude</th></tr></thead><tbody><tr><td>Pawn</td><td>1</td><td>1/6 ≈ 0.167</td></tr><tr><td>Knight</td><td>2</td><td>2/6 ≈ 0.333</td></tr><tr><td>Bishop</td><td>3</td><td>3/6 = 0.500</td></tr><tr><td>Rook</td><td>4</td><td>4/6 ≈ 0.667</td></tr><tr><td>Queen</td><td>5</td><td>5/6 ≈ 0.833</td></tr><tr><td>King</td><td>6</td><td>6/6 = 1.000</td></tr></tbody></table><p>White pieces are positive and Black pieces are negative.</p><p>So:</p><pre><code>empty square  =  0.000
+White pawn    = +0.167
+Black pawn    = -0.167
+White knight  = +0.333
+Black knight  = -0.333
+...
+White king    = +1.000
+Black king    = -1.000</code></pre><p>A position therefore becomes a vector:</p><pre><code>x = [a1, b1, c1, ..., f8, g8, h8]</code></pre><p>containing 64 values.</p><h3>Example: <code>Nf3</code></h3><p>Suppose White moves the knight from <code>g1</code> to <code>f3</code>.</p><p>Before:</p><pre><code>g1 = +0.333
+f3 =  0.000</code></pre><p>After:</p><pre><code>g1 =  0.000
+f3 = +0.333</code></pre><p>Those changed inputs alter Layer 1. Layer 1 then changes Layer 2, which changes Layer 3, and so on until the final evaluation changes.</p><p>Importantly, <strong>the whole 64-square board is evaluated after the move</strong>, not merely the two changed squares.</p><hr><h1>How forward propagation works</h1><p>The forward pass is implemented in:</p><pre><code>NeuralNet.forward(x)</code></pre><p>For every neuron, the network performs a weighted sum:</p><pre><code>z = bias + Σ(weight × previous_activation)</code></pre><p>and then applies:</p><pre><code>activation = tanh(z)</code></pre><p>So one neuron in Hidden Layer 1 looks conceptually like:</p><pre><code>a1 ── weight ──┐
+b1 ── weight ──┤
+c1 ── weight ──┤
+...             ├── weighted sum + bias ── tanh ── H1 neuron
+g8 ── weight ──┤
+h8 ── weight ──┘</code></pre><p>Every Hidden Layer 1 neuron sees all 64 board inputs.</p><p>Then every Hidden Layer 2 neuron sees all 32 Layer 1 outputs:</p><pre><code>64 inputs
+   │
+   │ W1
+   ▼
+32 activations
+   │
+   │ W2
+   ▼
+24 activations
+   │
+   │ W3
+   ▼
+16 activations
+   │
+   │ W4
+   ▼
+8 activations
+   │
+   │ W5
+   ▼
+1 evaluation</code></pre><p>Mathematically:</p><pre><code>a0 = input board
+
+z1 = W1 × a0 + b1
+a1 = tanh(z1)
+
+z2 = W2 × a1 + b2
+a2 = tanh(z2)
+
+...
+
+z5 = W5 × a4 + b5
+output = tanh(z5)</code></pre><p>The network contains only <strong>3,336 multiplications by weights per forward pass</strong>, plus additions and activation functions. That is one reason this design runs comfortably in ordinary JavaScript.</p><hr><h1>How a move becomes a recommendation</h1><p>The move-ranking logic is implemented by:</p><pre><code>rankLegalMoves(net, chess)</code></pre><p>For every legal candidate move:</p><ol><li>Temporarily play the move.</li><li>Encode the resulting board.</li><li>Run the resulting board through the neural network.</li><li>Record the output.</li><li>Undo the move.</li><li>Compare the result with every other legal move.</li></ol><p>For White:</p><pre><code>higher output = preferred</code></pre><p>For Black:</p><pre><code>lower output = preferred</code></pre><p>Imagine this position has four legal candidates:</p><pre><code>Current evaluation: +0.05
+
+Nf3 → +0.19
+e4  → +0.14
+d4  → +0.08
+Na3 → -0.03</code></pre><p>If White is moving, the network ranks:</p><pre><code>1. Nf3   +0.19
+2. e4    +0.14
+3. d4    +0.08
+4. Na3   -0.03</code></pre><p>The app also calculates <strong>side benefit</strong>.</p><p>For White:</p><pre><code>side benefit = candidate score - current score</code></pre><p>For Black:</p><pre><code>side benefit = -(candidate score - current score)</code></pre><p>That gives the user interface one convenient rule:</p><pre><code>positive side benefit = better for whoever is moving
+negative side benefit = worse for whoever is moving</code></pre><h3>A very important limitation</h3><p>This is currently a <strong>one-ply evaluation</strong>.</p><p>The network asks:</p><p>&gt; “What does the board look like immediately after this move?”</p><p>It does <strong>not</strong> yet ask:</p><p>&gt; “What is my opponent&#x27;s strongest response to this move?”</p><p>That limitation matters more for playing strength than adding another dense layer.</p><hr><h1>How the neural pulse relates to a move</h1><p>The Neural Network tab lets you select a legal candidate without committing it to the actual game.</p><figure><img src="README_assets/guide_decision_analysis.png" alt="Candidate move decision analysis"><figcaption>Candidate move decision analysis</figcaption></figure><p>When you select a candidate:</p><pre><code>Current position
+      │
+      ├── temporarily make candidate move
+      │
+      ▼
+Resulting board
+      │
+      ▼
+encode 64 squares
+      │
+      ▼
+forward propagation
+      │
+      ▼
+final evaluation</code></pre><p>The pulse visualization is showing the <strong>real activations calculated by <code>forward()</code></strong>.</p><figure><img src="README_assets/guide_neural_pulse.png" alt="Live neural activation pulse"><figcaption>Live neural activation pulse</figcaption></figure><p>The gold move arrow identifies the move being previewed.</p><p>The columns show:</p><pre><code>64 inputs → H1:32 → H2:24 → H3:16 → H4:8 → output:1</code></pre><h3>Node color</h3><p>The visualizer separates:</p><ul><li>positive activation,</li><li>negative activation,</li><li>activation near zero.</li></ul><p>A highly saturated node means its absolute activation is relatively large.</p><h3>Connection brightness</h3><p>The visualizer cannot draw all connections with equal emphasis without becoming unreadable.</p><p>Instead it highlights the strongest live contributions.</p><p>For a connection:</p><pre><code>contribution = source activation × connection weight</code></pre><p>For example:</p><pre><code>source activation = +0.60
+weight            = +0.80
+contribution      = +0.48</code></pre><p>versus:</p><pre><code>source activation = +0.03
+weight            = +0.80
+contribution      = +0.024</code></pre><p>The first connection is much more relevant to <em>this particular forward pass</em>, even though both use the same weight.</p><p>This is why the pulse changes when the board changes even if the weights have not changed.</p><h3>The animation is deliberately slowed down</h3><p>The real JavaScript forward pass happens extremely quickly.</p><p>The visual pulse is a slowed representation of the already-computed layer sequence:</p><pre><code>input → H1 → H2 → H3 → H4 → output</code></pre><p>It is not showing the processor literally spending hundreds of milliseconds inside each layer.</p><hr><h1>What the weights mean</h1><p>A weight is a trainable number connecting one neuron to another.</p><p>For Layer 1:</p><pre><code>weight[e4 → H1-7]</code></pre><p>means:</p><p>&gt; “How strongly should the numeric value on square e4 affect Hidden Layer 1 neuron 7?”</p><p>If:</p><pre><code>e4 activation = +0.167
+weight         = +0.90</code></pre><p>the contribution is:</p><pre><code>+0.167 × +0.90 ≈ +0.150</code></pre><p>But if a Black pawn occupied e4:</p><pre><code>e4 activation = -0.167
+weight         = +0.90</code></pre><p>the contribution becomes:</p><pre><code>-0.150</code></pre><p>So even a single first-layer weight does not simply mean:</p><p>&gt; “e4 is good.”</p><p>It means:</p><p>&gt; “When this signed square input is present, push this hidden feature in this direction.”</p><p>Later layers make interpretation even more distributed.</p><p>A chess concept such as:</p><pre><code>&quot;White has a strong kingside attack&quot;</code></pre><p>does not have to live in one neuron. It can emerge from a pattern across many neurons and many weights.</p><hr><h1>How the network learns</h1><p>Learning means:</p><p>&gt; <strong>Change the weights so the network output moves closer to a target value.</strong></p><p>The app has a function:</p><pre><code>net.trainOne(input, target, learningRate)</code></pre><p>Suppose:</p><pre><code>network output = +0.20
+training target = +0.80</code></pre><p>The network is underestimating White&#x27;s position.</p><p>Training computes how each weight contributed to the error and nudges the weights in a direction that tends to increase the output for that training example.</p><p>If instead:</p><pre><code>network output = +0.70
+training target = -0.50</code></pre><p>training nudges the weights in the opposite direction.</p><p>The network is therefore not storing chess positions as a lookup table. It is changing a shared system of thousands of parameters.</p><p>The same weights are reused for every board.</p><hr><h1>The four ways this app trains</h1><p>There are four distinct learning sources.</p><h2>1. Bootstrap training</h2><p>Buttons:</p><pre><code>Train 250
+Train 1000</code></pre><p>Bootstrap training generates legal positions and uses a simple handcrafted teacher.</p><p>The teacher values material approximately as:</p><pre><code>pawn   = 1
+knight = 3
+bishop = 3.25
+rook   = 5
+queen  = 9
+king   = 0</code></pre><p>White material is positive. Black material is negative.</p><p>Check adds a small adjustment.</p><p>Then the score is compressed into the <code>-1 ... +1</code> range using:</p><pre><code>target = tanh(material_score / 5)</code></pre><p>Checkmate is explicitly:</p><pre><code>White wins = +1
+Black wins = -1</code></pre><p>and draws are:</p><pre><code>0</code></pre><p>During generated bootstrap games, captures are deliberately selected more often when available so that the trainer sees more positions with unequal material.</p><p>The bootstrap learning rate is currently:</p><pre><code>0.012</code></pre><h3>What bootstrap training teaches well</h3><p>It can begin to learn:</p><ul><li>losing a queen is usually bad,</li><li>gaining material is usually good,</li><li>checkmate is decisive,</li><li>White advantage should push output positive,</li><li>Black advantage should push output negative.</li></ul><h3>What bootstrap training does <em>not</em> teach very well</h3><p>The teacher does not meaningfully reward:</p><ul><li>center control,</li><li>king safety before check,</li><li>pawn structure,</li><li>passed pawns,</li><li>development,</li><li>space,</li><li>piece activity,</li><li>weak squares,</li><li>tactical threats several moves away.</li></ul><p>A deeper network cannot magically learn concepts that its training targets never reward.</p><p>That is an important reason <strong>more layers are not the first upgrade I recommend</strong>.</p><hr><h2>2. Self-play</h2><p>The <strong>Self-play 1 game</strong> button makes the network play both sides.</p><p>The current loop:</p><ol><li>Stores every position it visits.</li><li>Usually chooses its best neural move.</li><li>Uses a random move approximately 25% of the time for exploration.</li><li>Stops at game end or 100 plies.</li><li>Produces a final result.</li><li>Trains all stored positions toward that result.</li></ol><p>If checkmate occurs:</p><pre><code>White win → +1
+Black win → -1</code></pre><p>If a normal draw occurs:</p><pre><code>0</code></pre><p>If the 100-ply limit is reached, the simple material teacher supplies a fallback score.</p><p>The self-play learning rate is:</p><pre><code>0.0025</code></pre><p>This resembles a simple form of <strong>Monte Carlo value learning</strong>: positions are trained toward an eventual outcome.</p><p>It is intentionally much simpler than AlphaZero-style self-play.</p><hr><h2>3. Completed human-vs-AI games</h2><p>While you play the AI, the app stores the positions encountered during the game.</p><p>When the game ends, every stored position is trained toward the final result:</p><pre><code>White win → +1
+draw      → 0
+Black win → -1</code></pre><p>The current learning rate for completed human games is:</p><pre><code>0.002</code></pre><p>This means the network can continue changing as you actually play it.</p><p>One limitation is <strong>credit assignment</strong>.</p><p>If a game contains 80 positions and White eventually wins, the current simple system teaches all 80 positions toward the White-win target even though some earlier positions may have been equal or objectively bad for White.</p><p>A future TD-learning system can handle this more intelligently.</p><hr><h2>4. Manual back-propagation</h2><p>The Neural Network tab contains a <strong>Manual Learning Lab</strong>.</p><p>You choose:</p><pre><code>Target:       -1.00 ... +1.00
+Learning rate: 0.001 ... 0.050</code></pre><p>and press:</p><pre><code>Backpropagate current position</code></pre><p>If a candidate move is being previewed, the previewed candidate position is trained instead.</p><p>This gives you a very direct experiment:</p><pre><code>1. Select a position.
+2. Note its output.
+3. Choose a target.
+4. Back-propagate once.
+5. Watch the output change.
+6. Open Weights.
+7. Inspect the changed parameters.</code></pre><p>Use manual training carefully.</p><p>Repeatedly forcing one position toward <code>+1</code> with a high learning rate can overfit that example and disturb evaluations of other positions.</p><p>For experimentation, a learning rate around:</p><pre><code>0.005 – 0.010</code></pre><p>is a reasonable starting point.</p><hr><h1>What back-propagation is doing mathematically</h1><p>The loss is squared error:</p><pre><code>loss = (prediction - target)²</code></pre><p>If:</p><pre><code>prediction = 0.20
+target     = 0.80</code></pre><p>then:</p><pre><code>loss = (0.20 - 0.80)²
+     = 0.36</code></pre><p>Because the output uses <code>tanh</code>, the output error signal is:</p><pre><code>delta_output =
+    2 × (prediction - target)
+      × (1 - prediction²)</code></pre><p>For our example:</p><pre><code>delta_output =
+    2 × (0.20 - 0.80)
+      × (1 - 0.20²)
+
+= -1.152</code></pre><p>Suppose a neuron in Hidden Layer 4 has activation:</p><pre><code>a = +0.50</code></pre><p>Then the gradient contribution for its output weight is approximately:</p><pre><code>gradient = delta_output × a
+         = -1.152 × 0.50
+         = -0.576</code></pre><p>With learning rate:</p><pre><code>0.01</code></pre><p>gradient descent performs:</p><pre><code>new_weight =
+    old_weight - learning_rate × gradient
+
+= old_weight - 0.01 × (-0.576)
+
+= old_weight + 0.00576</code></pre><p>That connection becomes slightly more positive.</p><p>The error is then propagated backward through the earlier layers:</p><pre><code>output error
+     │
+     ▼
+H4 error
+     │
+     ▼
+H3 error
+     │
+     ▼
+H2 error
+     │
+     ▼
+H1 error</code></pre><p>The hidden-layer error uses the downstream weights and the <code>tanh</code> derivative:</p><pre><code>previous_delta =
+    (Wᵀ × delta)
+    × (1 - previous_activation²)</code></pre><p>Finally, every dense-layer weight is updated using:</p><pre><code>weight_change =
+    learning_rate
+    × delta_of_destination
+    × activation_of_source</code></pre><p>and:</p><pre><code>weight -= weight_change
+bias   -= learning_rate × delta</code></pre><p>This is real back-propagation implemented directly in JavaScript. There is no TensorFlow or PyTorch hiding these steps.</p><hr><h1>Watching weight updates happen</h1><p>After bootstrap training, the network-update counter increases.</p><figure><img src="README_assets/guide_training_updates.png" alt="Training update counter after bootstrap learning"><figcaption>Training update counter after bootstrap learning</figcaption></figure><p>The app records:</p><ul><li>total calls to <code>trainOne()</code>,</li><li>target used for the most recent update,</li><li>learning rate,</li><li>output before the update,</li><li>mean absolute weight change.</li></ul><p>The last statistic:</p><pre><code>mean |Δweight|</code></pre><p>helps answer:</p><p>&gt; “Did training really change the network?”</p><p>A value such as:</p><pre><code>2.4e-5</code></pre><p>means the average absolute weight movement in that update was approximately:</p><pre><code>0.000024</code></pre><p>Small individual updates are normal. Neural networks generally learn through many small changes.</p><hr><h1>How to read the Neural Network tab</h1><p>The neural tab is both a move-analysis tool and a learning microscope.</p><h2>Candidate list</h2><p>It evaluates all legal moves and ranks the strongest candidates.</p><p>You can select a move without playing it.</p><p>The app copies the current board, makes that hypothetical move, and runs the resulting position through the network.</p><h2>Before / after</h2><p>For a selected move it reports:</p><pre><code>Before: current board evaluation
+After:  board evaluation after candidate</code></pre><p>and:</p><pre><code>Side benefit</code></pre><p>which is oriented so positive always means better for the player to move.</p><h2>Neural pulse</h2><p>The pulse shows the real activations of:</p><pre><code>input → H1 → H2 → H3 → H4 → output</code></pre><h2>Layer cards</h2><p>Each layer reports:</p><ul><li>strongest activation,</li><li>mean absolute activation,</li><li>how many neurons are meaningfully active.</li></ul><p>These are useful signs of network behavior.</p><p>If nearly every <code>tanh</code> neuron sits close to:</p><pre><code>+1 or -1</code></pre><p>the network may be saturating, which can make learning slower because the <code>tanh</code> derivative becomes small.</p><h2>Board-square influence</h2><figure><img src="README_assets/guide_influence_panels.png" alt="Detailed board-square and live-connection influence panels"><figcaption>Detailed board-square and live-connection influence panels</figcaption></figure><p>This panel examines occupied squares and summarizes how strongly each square is feeding Hidden Layer 1 in the current forward pass.</p><p>This is useful for understanding <em>which inputs are active</em>, but it should not be interpreted as a perfect causal explanation of the chess evaluation.</p><h2>Strongest live connections</h2><p>This sorts live connections by:</p><pre><code>|activation × weight|</code></pre><p>and shows the strongest signals currently travelling through the network.</p><p>Again, this is a useful internal diagnostic, not a mathematically complete attribution system such as integrated gradients or SHAP.</p><hr><h1>How to read the Weights tab</h1><figure><img src="README_assets/guide_weights_view.png" alt="Weights tab"><figcaption>Weights tab</figcaption></figure><p>The Weights tab lets you inspect each trainable matrix:</p><pre><code>Layer 1: 64 → 32
+Layer 2: 32 → 24
+Layer 3: 24 → 16
+Layer 4: 16 → 8
+Layer 5: 8 → 1</code></pre><p>For Layer 1 the input columns correspond directly to:</p><pre><code>a1, b1, c1, ... h8</code></pre><p>A row corresponds to one Hidden Layer 1 neuron.</p><p>So a cell is literally:</p><pre><code>weight[square → hidden neuron]</code></pre><p>For example:</p><pre><code>column e4
+row H1-12</code></pre><p>is the weight connecting the encoded value of square <code>e4</code> to Hidden Layer 1 neuron 12.</p><p>The tab also reports:</p><ul><li>minimum weight,</li><li>maximum weight,</li><li>mean weight,</li><li>mean absolute weight,</li><li>standard deviation,</li><li>training update count,</li><li>latest mean absolute weight change,</li><li>biases.</li></ul><h3>Do not expect weights to become human-readable chess rules</h3><p>You should not expect to open the table and see:</p><pre><code>&quot;this neuron = knight outpost&quot;</code></pre><p>Dense networks tend to use distributed representations.</p><p>A useful feature can be represented by many neurons at once, while a single neuron can participate in several features.</p><hr><h1>Should we use more layers?</h1><h2>Short answer</h2><p><strong>Not yet.</strong></p><p>The current network already has:</p><pre><code>5 trainable layers
+3,417 trainable parameters
+4 hidden layers</code></pre><p>For the current 64-number input representation, depth is not the main bottleneck.</p><p>Adding layers now would give the model more mathematical capacity, but it would <em>not</em> fix the three most important weaknesses:</p><ol><li><strong>The board representation is too compressed.</strong></li><li><strong>Move selection only looks one move ahead.</strong></li><li><strong>The training targets contain limited chess knowledge.</strong></li></ol><p>Those improvements are more likely to improve chess quality than simply changing:</p><pre><code>64 → 32 → 24 → 16 → 8 → 1</code></pre><p>into something like:</p><pre><code>64 → 64 → 48 → 32 → 24 → 16 → 8 → 1</code></pre><h2>Why more depth can actually make this version harder to train</h2><p>Every hidden layer currently uses:</p><pre><code>tanh()</code></pre><p>Its derivative is:</p><pre><code>1 - activation²</code></pre><p>Near:</p><pre><code>activation = +1 or -1</code></pre><p>that derivative approaches zero.</p><p>With more <code>tanh</code> layers, back-propagated gradients can become progressively smaller.</p><p>This is the classic <strong>vanishing-gradient</strong> problem.</p><p>Modern deep networks often use techniques such as:</p><ul><li>ReLU / GELU-like activations,</li><li>residual connections,</li><li>normalization,</li><li>much larger training datasets,</li><li>adaptive optimizers.</li></ul><p>Our project deliberately avoids that machinery so the learning code remains understandable.</p><h2>Why keeping the current depth is valuable</h2><p>The current architecture is small enough that:</p><ul><li>you can inspect every matrix,</li><li>training is responsive in Safari,</li><li>evaluating every legal move is cheap,</li><li>exporting the brain produces a manageable JSON file,</li><li>the pulse visualization remains understandable,</li><li>back-propagation is easy to trace.</li></ul><p>That is a major educational advantage.</p><hr><h1>What I would improve before adding layers</h1><h2>Priority 1 — Better board encoding</h2><p>This is the biggest architectural improvement I would make.</p><p>Right now a square contains one ordinal number:</p><pre><code>pawn   = 1/6
+knight = 2/6
+bishop = 3/6
+...
+king   = 6/6</code></pre><p>That accidentally tells the network that the piece identities lie on one numeric line.</p><p>For example, it structurally sees:</p><pre><code>bishop = 0.5
+queen  = 0.833</code></pre><p>rather than treating “bishop” and “queen” as independent categories.</p><p>A better representation uses <strong>12 binary piece planes</strong>:</p><pre><code>White pawn plane
+White knight plane
+White bishop plane
+White rook plane
+White queen plane
+White king plane
+
+Black pawn plane
+Black knight plane
+Black bishop plane
+Black rook plane
+Black queen plane
+Black king plane</code></pre><p>Each plane has 64 squares:</p><pre><code>12 × 64 = 768 inputs</code></pre><p>Then add state information such as:</p><pre><code>side to move
+White kingside castling right
+White queenside castling right
+Black kingside castling right
+Black queenside castling right
+en-passant information</code></pre><p>This gives the network a much cleaner chess representation.</p><h3>My recommendation</h3><p>Keep approximately the <strong>same number of trainable layers</strong>, but improve the input.</p><p>For example conceptually:</p><pre><code>~780 inputs
+    ↓
+64
+    ↓
+32
+    ↓
+16
+    ↓
+8
+    ↓
+1</code></pre><p>This is much more meaningful than adding several extra layers to the current 64-scalar representation.</p><p>It will be slower, but still realistic for an educational iPad project if implemented carefully.</p><hr><h2>Priority 2 — Look ahead one opponent reply</h2><p>This would probably produce the largest immediate improvement in move quality.</p><p>Current:</p><pre><code>my move
+   ↓
+evaluate</code></pre><p>Better:</p><pre><code>my move
+   ↓
+opponent&#x27;s best reply
+   ↓
+evaluate</code></pre><p>For White, conceptually:</p><pre><code>score(candidate) =
+    minimum neural evaluation
+    over all Black replies</code></pre><p>because Black will choose the reply that is worst for White.</p><p>Then White chooses the candidate with the highest resulting score.</p><p>This is a two-ply minimax search:</p><pre><code>White candidate A
+   ├── Black reply 1 → +0.30
+   ├── Black reply 2 → -0.40  ← Black chooses this
+   └── Black reply 3 → +0.10
+candidate A score = -0.40
+
+White candidate B
+   ├── Black reply 1 → +0.05
+   ├── Black reply 2 → +0.02  ← Black chooses this
+   └── Black reply 3 → +0.20
+candidate B score = +0.02
+
+White should choose B.</code></pre><p>Without this search, Candidate A might incorrectly appear attractive if its immediate position looked excellent.</p><p>I would add this <strong>before making the network deeper</strong>.</p><hr><h2>Priority 3 — Better learning targets</h2><p>The current material teacher is useful for bootstrapping but simplistic.</p><p>Possible improvements include teacher bonuses for:</p><ul><li>mobility,</li><li>center occupation,</li><li>developed minor pieces,</li><li>king safety,</li><li>doubled pawns,</li><li>passed pawns,</li><li>rook activity,</li><li>bishop pair,</li><li>queen safety.</li></ul><p>But handcrafted rules eventually become another chess engine.</p><p>A better learning-oriented approach is <strong>temporal-difference learning</strong>.</p><p>Instead of training every position to the final game result, use the next position to update the current position.</p><p>Conceptually:</p><pre><code>target(current position) =
+    reward + gamma × value(next position)</code></pre><p>For a nonterminal move:</p><pre><code>reward ≈ 0</code></pre><p>so:</p><pre><code>target ≈ value(next position)</code></pre><p>Near checkmate:</p><pre><code>reward = ±1</code></pre><p>This propagates information backward through games more gradually.</p><p>An even better educational extension is TD(λ), which distributes credit across several recent positions.</p><hr><h2>Priority 4 — Experience replay</h2><p>Currently a training position is generally used and then forgotten.</p><p>An experience-replay buffer would store examples:</p><pre><code>(position, target)</code></pre><p>and repeatedly sample mixed old/new experiences.</p><p>Benefits:</p><ul><li>reduces catastrophic forgetting,</li><li>mixes different game phases,</li><li>prevents training from depending too heavily on the most recent game,</li><li>allows multiple learning passes over valuable examples.</li></ul><p>Even a small browser-friendly buffer of:</p><pre><code>1,000 – 10,000 positions</code></pre><p>could be useful.</p><p>It could be saved separately from the network weights.</p><hr><h2>Priority 5 — Only then consider more depth</h2><p>After improving representation, search and training, we can measure whether the model is underfitting.</p><p>Signs that more capacity may help:</p><ul><li>training loss remains high despite many diverse examples,</li><li>predictions barely distinguish strategically different positions,</li><li>more training no longer improves evaluation quality,</li><li>hidden layers are not saturated but the model cannot fit richer targets.</li></ul><p>At that point, widening layers is often the first experiment:</p><pre><code>64 → 48 → 32 → 24 → 12 → 1</code></pre><p>rather than immediately adding several extra layers.</p><p>For a richer 12-plane board encoding, a somewhat wider network would make more sense.</p><hr><h1>A sensible Version 2 roadmap</h1><p>If the aim is to make this project substantially smarter while keeping it understandable on an iPad, I would do the upgrades in this order.</p><table><thead><tr><th>Phase</th><th>Upgrade</th><th>Why</th></tr></thead><tbody><tr><td><strong>1 — current</strong></td><td>64 → 32 → 24 → 16 → 8 → 1</td><td>Small, inspectable baseline</td></tr><tr><td><strong>2</strong></td><td>12-plane piece encoding + game-state inputs</td><td>Gives the network cleaner chess information</td></tr><tr><td><strong>3</strong></td><td>2-ply minimax / alpha-beta</td><td>Stops many obvious one-move tactical mistakes</td></tr><tr><td><strong>4</strong></td><td>Experience replay</td><td>Makes learning more stable</td></tr><tr><td><strong>5</strong></td><td>TD learning</td><td>Improves credit assignment through games</td></tr><tr><td><strong>6</strong></td><td>Wider network</td><td>Adds capacity when richer data justifies it</td></tr><tr><td><strong>7</strong></td><td>Optional policy head</td><td>Learns which moves deserve attention</td></tr><tr><td><strong>8</strong></td><td>Optional convolutional layers</td><td>Exploits the spatial structure of the board</td></tr></tbody></table><h3>Why convolution is interesting</h3><p>Chess is spatial.</p><p>Patterns such as:</p><pre><code>pawn protects knight
+rook on open file
+bishop diagonal
+king pawn shield</code></pre><p>depend on local and geometric relationships.</p><p>A fully connected network has to learn these relationships separately for many squares.</p><p>A convolutional network can reuse spatial pattern detectors across the board.</p><p>However, implementing convolution and its back-propagation from scratch would make this educational project considerably larger.</p><p>I would therefore keep the dense network until the current learning system is thoroughly understood.</p><hr><h1>Experiments to try</h1><h2>Experiment 1 — Watch an untrained brain</h2><ol><li>Press <strong>Reset brain</strong>.</li><li>Look at Recommended Moves.</li><li>Open Neural Network.</li><li>Record the output.</li><li>Open Weights.</li></ol><p>A brand-new network starts with random weights, so move rankings are mostly arbitrary.</p><p>This demonstrates that the application is not secretly using a chess engine for its neural recommendations.</p><hr><h2>Experiment 2 — Bootstrap it</h2><ol><li>Reset.</li><li>Press <strong>Train 250</strong>.</li><li>Watch <code>Training updates</code>.</li><li>Re-open Recommended Moves.</li><li>Compare the new ranking with the old one.</li></ol><p>The update counter should increase by approximately 250.</p><p>The weights and recommendations should change.</p><hr><h2>Experiment 3 — Train one exact position manually</h2><p>Find a position where White has a large material advantage.</p><p>Open Neural Network and note:</p><pre><code>output = ?</code></pre><p>Set:</p><pre><code>target = +0.80
+learning rate = 0.005</code></pre><p>Back-propagate several times.</p><p>Watch the output move toward the target.</p><p>Then open Weights and observe:</p><pre><code>Training updates
+Last mean |Δw|</code></pre><p>This is one of the clearest demonstrations of neural learning.</p><hr><h2>Experiment 4 — Compare two candidate pulses</h2><p>In the Neural Network tab:</p><ol><li>Select the #1 candidate.</li><li>Note the output and strongest connections.</li><li>Select a low-ranked candidate.</li><li>Compare the output and activation patterns.</li></ol><p>You are looking at:</p><pre><code>same weights
+different hypothetical board
+different activations
+different final evaluation</code></pre><hr><h2>Experiment 5 — Demonstrate one-ply weakness</h2><p>Look for a position in which a move wins something immediately but allows a strong opponent reply.</p><p>The current move recommender may like the move because it only evaluates:</p><pre><code>position after my move</code></pre><p>This experiment demonstrates exactly why search depth and neural-network depth are different concepts.</p><hr><h1>Important limitations</h1><p>This project is intentionally educational.</p><h2>1. The network does not see all chess state</h2><p>The current 64 inputs do not explicitly encode:</p><ul><li>whose turn it is,</li><li>castling rights,</li><li>en-passant square,</li><li>repetition count,</li><li>fifty-move counter.</li></ul><p><code>chess.js</code> knows this information for move legality, but the neural evaluation itself does not receive all of it as inputs.</p><p>That can make two strategically different states look identical to the network.</p><h2>2. Piece representation is compressed</h2><p>One scalar per square is simple, but 12 one-hot planes would be a cleaner machine-learning representation.</p><h2>3. Recommendations are one-ply</h2><p>The network does not currently search the opponent&#x27;s best response.</p><h2>4. Bootstrap knowledge is mainly material-based</h2><p>Therefore the initial learner will be much better at learning:</p><pre><code>&quot;winning a queen is good&quot;</code></pre><p>than:</p><pre><code>&quot;a queenside pawn majority may become important 20 moves later&quot;</code></pre><h2>5. Self-play is simple</h2><p>It does not use:</p><ul><li>Monte Carlo Tree Search,</li><li>policy/value dual heads,</li><li>prioritized replay,</li><li>massive parallel games,</li><li>millions of positions.</li></ul><p>That simplicity is intentional.</p><h2>6. Neural influence is diagnostic, not a proof</h2><p>A bright line means:</p><pre><code>activation × weight</code></pre><p>is large for that connection.</p><p>It does not prove that the network has a human-readable concept attached to that line.</p><h2>7. A lower loss is not automatically stronger chess</h2><p>The model can become very good at imitating a simplistic teacher.</p><p>That does not mean the teacher itself is strategically strong.</p><p>Training quality depends on the quality of the target signal.</p><hr><h1>Saving the brain</h1><p>The network contains:</p><pre><code>sizes
+weights
+biases
+trainingUpdates
+lastUpdate</code></pre><p>The app can save these in browser <code>localStorage</code>.</p><p>It can also export them to:</p><pre><code>chess_brain.json</code></pre><p>This JSON file is the learned network.</p><p>You can:</p><pre><code>train → export → close app → reopen → import → continue training</code></pre><p>A useful practice is to export checkpoints:</p><pre><code>brain_0000.json
+brain_0250.json
+brain_1000.json
+brain_5000.json</code></pre><p>Then you can compare how the recommendations evolve.</p><hr><h1>Where to modify the code</h1><p>Nearly all interesting machine-learning behavior lives in <a href="app.js"><code>app.js</code></a>.</p><table><thead><tr><th>Function / class</th><th>What it controls</th></tr></thead><tbody><tr><td><code>PIECE_CODE</code></td><td>Current one-number-per-square representation</td></tr><tr><td><code>MATERIAL_VALUE</code></td><td>Bootstrap teacher&#x27;s material values</td></tr><tr><td><code>NeuralNet.constructor()</code></td><td>Architecture and initial random weights</td></tr><tr><td><code>NeuralNet.forward()</code></td><td>Forward propagation</td></tr><tr><td><code>NeuralNet.trainOne()</code></td><td>Back-propagation and gradient descent</td></tr><tr><td><code>encodeBoard()</code></td><td>Converts chess position into network inputs</td></tr><tr><td><code>teacherScore()</code></td><td>Bootstrap training target</td></tr><tr><td><code>evaluatePosition()</code></td><td>Produces neural evaluation</td></tr><tr><td><code>rankLegalMoves()</code></td><td>Recommended-move ranking</td></tr><tr><td><code>chooseMove()</code></td><td>AI move selection</td></tr><tr><td><code>trainBootstrap()</code></td><td>Train 250 / Train 1000</td></tr><tr><td><code>selfPlayOneGame()</code></td><td>Self-play training</td></tr><tr><td><code>learnFromFinishedGame()</code></td><td>Learning after your completed games</td></tr><tr><td><code>renderNeuralNetwork()</code></td><td>Live neural visualization</td></tr><tr><td><code>renderWeights()</code></td><td>Weights tab</td></tr></tbody></table><hr><h1>The most important idea to take away</h1><p>There are three separate things that are easy to confuse:</p><h2>Network depth</h2><pre><code>How many mathematical layers transform the position?</code></pre><p>Current answer:</p><pre><code>5 trainable layers</code></pre><h2>Search depth</h2><pre><code>How many future chess moves are considered?</code></pre><p>Current answer:</p><pre><code>1 ply</code></pre><h2>Learning depth / quality</h2><pre><code>How informative are the targets and training experiences?</code></pre><p>Current answer:</p><pre><code>simple material bootstrap
++ basic self-play
++ completed-game outcome learning
++ manual targets</code></pre><p>Adding neural layers only changes the first one.</p><p>For this project, <strong>improving search depth and training quality is more valuable right now than adding neural-network depth</strong>.</p><hr><h1>Recommended next architecture</h1><p>My next version would therefore <strong>keep roughly five trainable layers</strong>, but change what they receive and how moves are selected.</p><p>Conceptually:</p><pre><code>12 piece planes
++ side to move
++ castling rights
++ en-passant state
+        │
+        ▼
+richer input vector
+        │
+        ▼
+moderately wider dense layers
+        │
+        ▼
+value output</code></pre><p>Then move selection becomes:</p><pre><code>candidate move
+      │
+      ▼
+opponent replies
+      │
+      ▼
+network evaluates each reply
+      │
+      ▼
+minimax chooses robust candidate</code></pre><p>Only after that would I test whether adding additional hidden layers improves measured performance.</p><p>That preserves the spirit of this project:</p><p>&gt; <strong>build it yourself, understand every number, and make each upgrade for a reason.</strong></p>
+</main></body></html>
