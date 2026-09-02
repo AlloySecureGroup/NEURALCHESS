@@ -1,0 +1,598 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Interactive PyTorch Neural Network Builder</title>
+<style>
+  :root{
+    --bg:#07111d;
+    --bg2:#0a1625;
+    --panel:rgba(14,28,46,.86);
+    --panel2:rgba(10,22,37,.92);
+    --border:#263c56;
+    --text:#edf6ff;
+    --muted:#91a9c1;
+    --blue:#4da3ff;
+    --cyan:#4de0ff;
+    --green:#62e889;
+    --purple:#ba83ff;
+    --orange:#ff6a3d;
+    --danger:#ff6b7a;
+    --shadow:0 18px 60px rgba(0,0,0,.34);
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;
+    min-height:100vh;
+    background:
+      radial-gradient(circle at 15% 5%, rgba(77,163,255,.13), transparent 28%),
+      radial-gradient(circle at 90% 15%, rgba(186,131,255,.1), transparent 25%),
+      linear-gradient(180deg,var(--bg),#050b13 85%);
+    color:var(--text);
+    font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  }
+  button,input,select{font:inherit}
+  .app{max-width:1600px;margin:auto;padding:26px}
+  header{
+    display:flex;align-items:center;justify-content:space-between;gap:16px;
+    margin-bottom:20px;
+  }
+  .brand{display:flex;align-items:center;gap:15px}
+  .logo{
+    width:48px;height:48px;border-radius:15px;display:grid;place-items:center;
+    background:linear-gradient(145deg,rgba(255,106,61,.2),rgba(255,106,61,.05));
+    border:1px solid rgba(255,106,61,.4); box-shadow:0 0 30px rgba(255,106,61,.12);
+    color:var(--orange);font-size:26px;font-weight:900;
+  }
+  h1{font-size:clamp(24px,3vw,42px);margin:0;letter-spacing:-.035em}
+  .subtitle{margin-top:5px;color:var(--muted)}
+  .status{
+    display:flex;align-items:center;gap:8px;color:#bde8ca;font-size:13px;
+    background:rgba(98,232,137,.08);border:1px solid rgba(98,232,137,.25);
+    border-radius:999px;padding:8px 12px;white-space:nowrap
+  }
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 12px var(--green)}
+  .grid{display:grid;grid-template-columns:320px minmax(430px,1fr) minmax(420px,.9fr);gap:16px}
+  .panel{
+    background:linear-gradient(145deg,var(--panel),var(--panel2));
+    border:1px solid var(--border);border-radius:18px;box-shadow:var(--shadow);
+    overflow:hidden;
+  }
+  .panel-head{
+    padding:16px 18px;border-bottom:1px solid rgba(145,169,193,.15);
+    display:flex;align-items:center;justify-content:space-between;gap:12px
+  }
+  .panel-title{font-size:16px;font-weight:800;display:flex;align-items:center;gap:9px}
+  .tiny{font-size:12px;color:var(--muted)}
+  .controls{padding:16px;display:grid;gap:15px}
+  .control-row{display:grid;gap:8px}
+  .label-row{display:flex;justify-content:space-between;align-items:center;gap:10px}
+  label{font-size:13px;color:#d9e7f4;font-weight:650}
+  .stepper{display:grid;grid-template-columns:36px 56px 36px;border:1px solid #35506d;border-radius:10px;overflow:hidden}
+  .stepper button,.stepper input{
+    border:0;background:#102238;color:var(--text);height:36px;text-align:center
+  }
+  .stepper button{cursor:pointer;color:#b9d2ea;font-size:18px}
+  .stepper button:hover{background:#173251}
+  .stepper input{width:100%;border-left:1px solid #35506d;border-right:1px solid #35506d;outline:none;font-weight:700}
+  .stepper input::-webkit-outer-spin-button,.stepper input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+  select{
+    width:100%;background:#102238;color:var(--text);border:1px solid #35506d;
+    border-radius:10px;padding:10px 12px;outline:none
+  }
+  .hidden-list{display:grid;gap:9px}
+  .hidden-item{
+    display:flex;align-items:center;justify-content:space-between;gap:10px;
+    padding:10px;border:1px solid rgba(77,163,255,.16);border-radius:12px;background:rgba(77,163,255,.04)
+  }
+  .hidden-name{font-size:13px;color:#c9dced}
+  .actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .btn{
+    border:1px solid #365574;background:#13283f;color:var(--text);border-radius:10px;
+    padding:10px 12px;font-weight:750;cursor:pointer;transition:.18s ease
+  }
+  .btn:hover{transform:translateY(-1px);border-color:#4c78a3}
+  .btn.primary{background:linear-gradient(180deg,#2f8cff,#196ed7);border-color:#55a6ff}
+  .btn.danger{background:rgba(255,107,122,.08);border-color:rgba(255,107,122,.45);color:#ff98a2}
+  .btn.ghost{padding:8px 10px;background:#0d1c2d;font-size:12px}
+  .connection-tools{
+    border-top:1px solid rgba(145,169,193,.15);padding-top:14px;display:grid;gap:10px
+  }
+  input[type="range"]{width:100%;accent-color:var(--blue)}
+  .diagram-wrap{height:610px;position:relative;background:
+    linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px),
+    linear-gradient(90deg,rgba(255,255,255,.025) 1px, transparent 1px);
+    background-size:28px 28px;
+  }
+  #network{width:100%;height:100%;display:block}
+  .hint{
+    position:absolute;left:16px;right:16px;bottom:14px;
+    display:flex;align-items:center;justify-content:space-between;gap:12px;
+    background:rgba(5,11,19,.72);border:1px solid rgba(145,169,193,.2);
+    backdrop-filter:blur(8px);padding:9px 11px;border-radius:11px;color:#afc4d8;font-size:12px
+  }
+  .legend{display:flex;gap:13px;flex-wrap:wrap}
+  .legend span{display:flex;align-items:center;gap:6px}
+  .sw{width:9px;height:9px;border-radius:50%;display:inline-block}
+  .code-panel{display:flex;flex-direction:column}
+  .toolbar{display:flex;gap:8px}
+  pre{
+    margin:0;min-height:610px;max-height:610px;overflow:auto;padding:18px;
+    background:#08121f;color:#dcecff;font:13px/1.55 "SFMono-Regular",Consolas,"Liberation Mono",monospace;
+    tab-size:2;
+  }
+  code .kw{color:#ff8ee7}.code .class{color:#ffd166}.code .fn{color:#6bdfff}
+  code .num{color:#8be9fd}.code .str{color:#ffb86c}.code .com{color:#6f9f78}
+  .explain{
+    margin-top:16px;padding:17px 19px;border:1px solid #24527b;border-radius:15px;
+    background:linear-gradient(90deg,rgba(77,163,255,.08),rgba(77,224,255,.04));
+    color:#bfd2e4;line-height:1.6
+  }
+  .explain b{color:#eaf6ff}
+  .pill{display:inline-block;padding:2px 7px;border-radius:7px;background:#0d2034;border:1px solid #2c5476;color:#9dd5ff;font-family:monospace}
+  .toast{
+    position:fixed;right:22px;bottom:22px;background:#112941;border:1px solid #37658f;
+    color:#dff2ff;padding:11px 14px;border-radius:11px;box-shadow:var(--shadow);
+    opacity:0;transform:translateY(10px);pointer-events:none;transition:.2s ease
+  }
+  .toast.show{opacity:1;transform:translateY(0)}
+  .edge{stroke:rgba(194,219,242,.36);stroke-width:1.6;cursor:pointer;transition:.15s}
+  .edge:hover{stroke:#ffcf70;stroke-width:3}
+  .edge.off{stroke:rgba(255,107,122,.25);stroke-dasharray:5 5}
+  .node-label{fill:#9bb8d1;font-size:12px;font-weight:700}
+  .layer-title{fill:#d9e8f5;font-size:12px;font-weight:800}
+  .layer-size{fill:#7594ae;font-size:11px}
+  .node{cursor:default}
+  .node circle{stroke-width:2.5}
+  @media (max-width:1180px){
+    .grid{grid-template-columns:300px 1fr}
+    .code-panel{grid-column:1/-1}
+    pre{min-height:420px;max-height:520px}
+  }
+  @media (max-width:780px){
+    .app{padding:14px}.grid{grid-template-columns:1fr}header{align-items:flex-start}
+    .status{display:none}.code-panel{grid-column:auto}.diagram-wrap{height:520px}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="brand">
+      <div class="logo">∿</div>
+      <div>
+        <h1>Interactive <span style="color:var(--orange)">PyTorch</span> Neural Network Builder</h1>
+        <div class="subtitle">Edit layers and connections. The diagram and PyTorch code update live.</div>
+      </div>
+    </div>
+    <div class="status"><span class="dot"></span> Live code generation</div>
+  </header>
+
+  <main class="grid">
+    <section class="panel">
+      <div class="panel-head">
+        <div class="panel-title">⚙ Architecture Controls</div>
+        <div class="tiny">Editable</div>
+      </div>
+      <div class="controls">
+        <div class="control-row">
+          <div class="label-row"><label>Input nodes</label><div id="inputStepper"></div></div>
+        </div>
+
+        <div class="control-row">
+          <div class="label-row"><label>Hidden layers</label><span class="tiny" id="hiddenCount"></span></div>
+          <div id="hiddenList" class="hidden-list"></div>
+          <div class="actions">
+            <button class="btn primary" id="addLayer">＋ Add layer</button>
+            <button class="btn danger" id="removeLayer">− Remove</button>
+          </div>
+        </div>
+
+        <div class="control-row">
+          <div class="label-row"><label>Output nodes</label><div id="outputStepper"></div></div>
+        </div>
+
+        <div class="control-row">
+          <label for="activation">Activation function</label>
+          <select id="activation">
+            <option value="relu">ReLU</option>
+            <option value="gelu">GELU</option>
+            <option value="tanh">Tanh</option>
+            <option value="sigmoid">Sigmoid</option>
+            <option value="leaky_relu">Leaky ReLU</option>
+          </select>
+        </div>
+
+        <div class="control-row">
+          <label for="outputActivation">Output activation</label>
+          <select id="outputActivation">
+            <option value="none">None / logits</option>
+            <option value="sigmoid">Sigmoid</option>
+            <option value="softmax">Softmax</option>
+          </select>
+        </div>
+
+        <div class="connection-tools">
+          <div class="label-row">
+            <label>Connection visibility</label>
+            <span class="tiny"><span id="edgePercent">100</span>%</span>
+          </div>
+          <input id="edgeVisibility" type="range" min="15" max="100" value="100" />
+          <div class="tiny">Tip: click any line in the diagram to enable/disable that exact weight connection. The generated code switches to masked linear layers automatically.</div>
+          <button class="btn" id="resetConnections">Reset all connections</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <div>
+          <div class="panel-title">⌘ Network Diagram</div>
+          <div class="tiny" style="margin-top:3px">Nodes = features/neurons · Lines = weights</div>
+        </div>
+        <div class="tiny" id="paramCount"></div>
+      </div>
+      <div class="diagram-wrap">
+        <svg id="network" viewBox="0 0 820 610" role="img" aria-label="Interactive neural network diagram"></svg>
+        <div class="hint">
+          <div class="legend">
+            <span><i class="sw" style="background:var(--blue)"></i>Input</span>
+            <span><i class="sw" style="background:var(--green)"></i>Hidden</span>
+            <span><i class="sw" style="background:var(--purple)"></i>Output</span>
+          </div>
+          <span>Click a connection to toggle it</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel code-panel">
+      <div class="panel-head">
+        <div>
+          <div class="panel-title">⌨ Generated PyTorch Code</div>
+          <div class="tiny" style="margin-top:3px">Copy this into a Python file or notebook</div>
+        </div>
+        <div class="toolbar">
+          <button class="btn ghost" id="copyCode">Copy</button>
+          <button class="btn ghost" id="downloadPy">Download .py</button>
+        </div>
+      </div>
+      <pre><code class="code" id="code"></code></pre>
+    </section>
+  </main>
+
+  <div class="explain">
+    <b>How layers and connections map to PyTorch:</b>
+    a dense layer is <span class="pill">nn.Linear(in_features, out_features)</span>.
+    Those two numbers describe how many nodes connect from one layer to the next.
+    The <span class="pill">forward()</span> method defines the order data flows through the network.
+    When you disable individual lines above, this demo generates a small <span class="pill">MaskedLinear</span> class so those exact weights stay disconnected.
+  </div>
+</div>
+
+<div class="toast" id="toast">Copied</div>
+
+<script>
+(() => {
+  const state = {
+    input: 3,
+    hidden: [4, 4],
+    output: 2,
+    activation: 'relu',
+    outputActivation: 'none',
+    disabledEdges: new Set(),
+    edgeVisibility: 100
+  };
+
+  const $ = s => document.querySelector(s);
+  const svg = $('#network');
+  const codeEl = $('#code');
+  const hiddenList = $('#hiddenList');
+
+  function makeStepper(value, min, max, onChange) {
+    const wrap = document.createElement('div');
+    wrap.className = 'stepper';
+    const minus = document.createElement('button');
+    minus.textContent = '−';
+    const input = document.createElement('input');
+    input.type = 'number'; input.min = min; input.max = max; input.value = value;
+    const plus = document.createElement('button');
+    plus.textContent = '+';
+    minus.onclick = () => { input.value = Math.max(min, Number(input.value) - 1); input.dispatchEvent(new Event('change')); };
+    plus.onclick = () => { input.value = Math.min(max, Number(input.value) + 1); input.dispatchEvent(new Event('change')); };
+    input.onchange = () => {
+      const v = Math.max(min, Math.min(max, Number(input.value) || min));
+      input.value = v; onChange(v);
+    };
+    wrap.append(minus, input, plus);
+    return wrap;
+  }
+
+  function clearInvalidEdges() {
+    // Architecture changes make edge indices ambiguous, so reset safely.
+    state.disabledEdges.clear();
+  }
+
+  function buildControls() {
+    $('#inputStepper').replaceChildren(makeStepper(state.input, 1, 12, v => {
+      state.input = v; clearInvalidEdges(); render();
+    }));
+    $('#outputStepper').replaceChildren(makeStepper(state.output, 1, 12, v => {
+      state.output = v; clearInvalidEdges(); render();
+    }));
+    hiddenList.innerHTML = '';
+    state.hidden.forEach((size, i) => {
+      const row = document.createElement('div');
+      row.className = 'hidden-item';
+      const name = document.createElement('div');
+      name.className = 'hidden-name';
+      name.textContent = `Hidden ${i + 1}`;
+      row.append(name, makeStepper(size, 1, 12, v => {
+        state.hidden[i] = v; clearInvalidEdges(); render();
+      }));
+      hiddenList.append(row);
+    });
+    $('#hiddenCount').textContent = `${state.hidden.length} layer${state.hidden.length === 1 ? '' : 's'}`;
+  }
+
+  $('#addLayer').onclick = () => {
+    if (state.hidden.length >= 5) return toast('Maximum 5 hidden layers');
+    const last = state.hidden[state.hidden.length - 1] || 4;
+    state.hidden.push(last);
+    clearInvalidEdges(); buildControls(); render();
+  };
+  $('#removeLayer').onclick = () => {
+    if (state.hidden.length <= 0) return toast('Already at zero hidden layers');
+    state.hidden.pop();
+    clearInvalidEdges(); buildControls(); render();
+  };
+  $('#activation').onchange = e => { state.activation = e.target.value; renderCode(); };
+  $('#outputActivation').onchange = e => { state.outputActivation = e.target.value; renderCode(); };
+  $('#edgeVisibility').oninput = e => {
+    state.edgeVisibility = Number(e.target.value);
+    $('#edgePercent').textContent = state.edgeVisibility;
+    renderDiagram();
+  };
+  $('#resetConnections').onclick = () => {
+    state.disabledEdges.clear(); render();
+  };
+
+  function layers() {
+    return [state.input, ...state.hidden, state.output];
+  }
+
+  function edgeKey(layerIndex, from, to) {
+    return `${layerIndex}:${from}:${to}`;
+  }
+
+  function nodePositions(layerSizes) {
+    const left = 70, right = 750, top = 90, bottom = 500;
+    const xGap = layerSizes.length === 1 ? 0 : (right - left) / (layerSizes.length - 1);
+    return layerSizes.map((count, li) => {
+      const x = left + li * xGap;
+      const height = bottom - top;
+      const gap = count <= 1 ? 0 : Math.min(58, height / (count - 1));
+      const total = gap * (count - 1);
+      const y0 = (top + bottom) / 2 - total / 2;
+      return Array.from({length:count}, (_, i) => ({x, y:y0 + i * gap}));
+    });
+  }
+
+  function svgEl(tag, attrs={}) {
+    const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+    for (const [k,v] of Object.entries(attrs)) el.setAttribute(k,v);
+    return el;
+  }
+
+  function renderDiagram() {
+    svg.innerHTML = '';
+    const sizes = layers();
+    const pos = nodePositions(sizes);
+
+    const defs = svgEl('defs');
+    const filter = svgEl('filter',{id:'glow',x:'-80%',y:'-80%',width:'260%',height:'260%'});
+    const blur = svgEl('feGaussianBlur',{stdDeviation:'4',result:'b'});
+    const merge = svgEl('feMerge');
+    merge.append(svgEl('feMergeNode',{in:'b'}),svgEl('feMergeNode',{in:'SourceGraphic'}));
+    filter.append(blur,merge); defs.append(filter); svg.append(defs);
+
+    // Layer headings
+    sizes.forEach((count, li) => {
+      const p = pos[li][0] || {x:410};
+      const title = li === 0 ? 'Input' : li === sizes.length - 1 ? 'Output' : `Hidden ${li}`;
+      const t = svgEl('text',{x:p.x,y:33,'text-anchor':'middle',class:'layer-title'}); t.textContent = title;
+      const s = svgEl('text',{x:p.x,y:51,'text-anchor':'middle',class:'layer-size'}); s.textContent = `(${count})`;
+      svg.append(t,s);
+    });
+
+    // Connections
+    const vis = state.edgeVisibility / 100;
+    for (let li=0; li<pos.length-1; li++) {
+      for (let a=0; a<pos[li].length; a++) {
+        for (let b=0; b<pos[li+1].length; b++) {
+          const key = edgeKey(li,a,b);
+          const disabled = state.disabledEdges.has(key);
+          // Deterministic visual thinning from slider. Disabled edges remain faintly visible.
+          const hash = ((li+1)*73856093 ^ (a+1)*19349663 ^ (b+1)*83492791) >>> 0;
+          const visibleBySlider = (hash % 100) < state.edgeVisibility;
+          if (!visibleBySlider && !disabled) continue;
+
+          const line = svgEl('line',{
+            x1:pos[li][a].x+13,y1:pos[li][a].y,
+            x2:pos[li+1][b].x-13,y2:pos[li+1][b].y,
+            class:`edge${disabled?' off':''}`,
+            'data-key':key
+          });
+          line.onclick = () => {
+            if (state.disabledEdges.has(key)) state.disabledEdges.delete(key);
+            else state.disabledEdges.add(key);
+            render();
+          };
+          const title = svgEl('title');
+          title.textContent = disabled ? 'Disabled connection — click to enable' : 'Active connection — click to disable';
+          line.append(title);
+          svg.append(line);
+        }
+      }
+    }
+
+    // Nodes
+    pos.forEach((layer, li) => {
+      const kind = li===0 ? 'input' : li===pos.length-1 ? 'output' : 'hidden';
+      const color = kind==='input' ? '#4da3ff' : kind==='output' ? '#ba83ff' : '#62e889';
+      layer.forEach((p, i) => {
+        const g = svgEl('g',{class:'node'});
+        const c = svgEl('circle',{cx:p.x,cy:p.y,r:14,fill:'#0b1b2c',stroke:color,filter:'url(#glow)'});
+        const tx = svgEl('text',{x:p.x,y:p.y+4,'text-anchor':'middle',class:'node-label'});
+        tx.textContent = i+1;
+        g.append(c,tx); svg.append(g);
+      });
+    });
+
+    const activeParams = countActiveWeights(sizes) + sizes.slice(1).reduce((a,b)=>a+b,0);
+    const fullParams = sizes.slice(0,-1).reduce((sum,n,i)=>sum + n*sizes[i+1] + sizes[i+1],0);
+    $('#paramCount').textContent = state.disabledEdges.size
+      ? `${activeParams.toLocaleString()} active / ${fullParams.toLocaleString()} total parameters`
+      : `${fullParams.toLocaleString()} parameters`;
+  }
+
+  function countActiveWeights(sizes) {
+    let total = 0;
+    for (let li=0; li<sizes.length-1; li++) {
+      total += sizes[li]*sizes[li+1];
+    }
+    return Math.max(0,total-state.disabledEdges.size);
+  }
+
+  const actCode = {
+    relu: 'torch.relu',
+    gelu: 'F.gelu',
+    tanh: 'torch.tanh',
+    sigmoid: 'torch.sigmoid',
+    leaky_relu: 'F.leaky_relu'
+  };
+
+  function maskForLayer(li, inF, outF) {
+    const rows = [];
+    for (let o=0;o<outF;o++) {
+      const row = [];
+      for (let i=0;i<inF;i++) row.push(state.disabledEdges.has(edgeKey(li,i,o)) ? 0 : 1);
+      rows.push(row);
+    }
+    return rows;
+  }
+
+  function generateCode() {
+    const sizes = layers();
+    const sparse = state.disabledEdges.size > 0;
+    const imports = [`import torch`,`import torch.nn as nn`];
+    if (['gelu','leaky_relu'].includes(state.activation)) imports.push(`import torch.nn.functional as F`);
+
+    let out = imports.join('\n') + '\n\n';
+
+    if (sparse) {
+      out += `class MaskedLinear(nn.Linear):
+    """Linear layer whose mask permanently disables selected weights."""
+    def __init__(self, in_features, out_features, mask):
+        super().__init__(in_features, out_features)
+        self.register_buffer("mask", torch.tensor(mask, dtype=torch.float32))
+
+    def forward(self, x):
+        return nn.functional.linear(x, self.weight * self.mask, self.bias)
+
+
+`;
+    }
+
+    out += `class SimpleNN(nn.Module):
+    def __init__(self):
+        super().__init__()
+`;
+    for (let li=0; li<sizes.length-1; li++) {
+      const inF = sizes[li], outF = sizes[li+1];
+      if (sparse) {
+        const mask = JSON.stringify(maskForLayer(li,inF,outF));
+        out += `        self.fc${li+1} = MaskedLinear(${inF}, ${outF}, mask=${mask})\n`;
+      } else {
+        out += `        self.fc${li+1} = nn.Linear(${inF}, ${outF})\n`;
+      }
+    }
+
+    out += `\n    def forward(self, x):\n`;
+    const last = sizes.length-2;
+    for (let li=0; li<sizes.length-1; li++) {
+      if (li < last) {
+        out += `        x = ${actCode[state.activation]}(self.fc${li+1}(x))\n`;
+      } else {
+        out += `        x = self.fc${li+1}(x)\n`;
+      }
+    }
+
+    if (state.outputActivation === 'sigmoid') out += `        x = torch.sigmoid(x)\n`;
+    if (state.outputActivation === 'softmax') out += `        x = torch.softmax(x, dim=-1)\n`;
+    out += `        return x\n\n\n`;
+
+    out += `model = SimpleNN()
+print(model)
+
+# batch_size = 1, input_features = ${state.input}
+x = torch.randn(1, ${state.input})
+y = model(x)
+print("Output shape:", y.shape)
+print(y)
+`;
+    return out;
+  }
+
+  function escapeHTML(s){return s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}
+
+  function highlight(code) {
+    // Lightweight syntax coloring, intentionally simple and dependency-free.
+    let s = escapeHTML(code);
+    s = s.replace(/(#.*)$/gm,'<span class="com">$1</span>');
+    s = s.replace(/("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')/g,'<span class="str">$1</span>');
+    s = s.replace(/\b(class|def|return|import|from|as|super)\b/g,'<span class="kw">$1</span>');
+    s = s.replace(/\b(nn|torch|F|SimpleNN|MaskedLinear)\b/g,'<span class="class">$1</span>');
+    s = s.replace(/\b(\d+)\b/g,'<span class="num">$1</span>');
+    return s;
+  }
+
+  function renderCode() {
+    const code = generateCode();
+    codeEl.dataset.raw = code;
+    codeEl.innerHTML = highlight(code);
+  }
+
+  function render() {
+    renderDiagram();
+    renderCode();
+  }
+
+  function toast(msg) {
+    const t = $('#toast'); t.textContent = msg; t.classList.add('show');
+    clearTimeout(toast.timer); toast.timer=setTimeout(()=>t.classList.remove('show'),1500);
+  }
+
+  $('#copyCode').onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(codeEl.dataset.raw || generateCode());
+      toast('PyTorch code copied');
+    } catch {
+      toast('Copy blocked by browser');
+    }
+  };
+
+  $('#downloadPy').onclick = () => {
+    const blob = new Blob([codeEl.dataset.raw || generateCode()], {type:'text/x-python'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'simple_nn.py'; a.click();
+    setTimeout(()=>URL.revokeObjectURL(url),500);
+  };
+
+  buildControls();
+  render();
+})();
+</script>
+</body>
+</html>
